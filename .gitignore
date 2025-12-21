@@ -4,6 +4,11 @@
 # Logs
 *.log
 
+# Documents (exported reports)
+*.doc
+*.docx
+docx/
+
 # CMake
 build/
 cmake-build-*/
