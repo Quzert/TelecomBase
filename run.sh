@@ -3,6 +3,34 @@ set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
+usage() {
+  cat <<'USAGE'
+Usage:
+  ./run.sh [--reset-db]
+
+Options:
+  --reset-db   Stop services and remove volumes (full DB wipe) before starting.
+USAGE
+}
+
+reset_db=0
+for arg in "$@"; do
+  case "$arg" in
+    --reset-db)
+      reset_db=1
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $arg" >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
+done
+
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
     echo "Missing required command: $1" >&2
@@ -32,6 +60,11 @@ if [[ ! -f .env ]]; then
     echo "Missing .env and .env.example" >&2
     exit 1
   fi
+fi
+
+if [[ "$reset_db" -eq 1 ]]; then
+  echo "Resetting DB (docker compose down -v)..."
+  compose down -v
 fi
 
 # Start DB + API

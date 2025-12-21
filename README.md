@@ -21,6 +21,10 @@
 
 `./run.sh`
 
+Полный сброс БД перед запуском:
+
+`./run.sh --reset-db`
+
 3) Проверка доступности API:
 
 `curl -s http://localhost:8080/health`
