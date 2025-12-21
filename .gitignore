@@ -1,0 +1,19 @@
+.env
+
+# CMake
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+
+# Qt
+*.user
+*.autosave
+*.pro.user
+
+# Binaries
+TelecomBaseClient
+*.o
+*.obj
