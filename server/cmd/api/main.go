@@ -159,7 +159,9 @@ func main() {
 	defer db.Close()
 
 	application := &app{cfg: cfg, db: db}
-	application.seedIfEmpty(ctx)
+	if v := strings.ToLower(strings.TrimSpace(getEnv("SEED_DEMO", ""))); v == "1" || v == "true" || v == "yes" {
+		application.seedIfEmpty(ctx)
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", application.handleHealth)

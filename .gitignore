@@ -1,4 +1,8 @@
 .env
+.env.*
+
+# Logs
+*.log
 
 # CMake
 build/
@@ -8,12 +12,31 @@ CMakeCache.txt
 cmake_install.cmake
 compile_commands.json
 
+# Ninja
+.ninja_deps
+.ninja_log
+
 # Qt
 *.user
 *.autosave
 *.pro.user
 
+# QtCreator
+*.creator
+*.creator.user
+*.files
+*.includes
+*.config
+
 # Binaries
 TelecomBaseClient
 *.o
 *.obj
+
+# Editors/OS
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
