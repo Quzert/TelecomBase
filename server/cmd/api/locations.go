@@ -11,25 +11,15 @@ type locationListItem struct {
 }
 
 func (a *app) handleLocationsList(w http.ResponseWriter, r *http.Request) {
-	rows, err := a.db.Query(r.Context(), "SELECT id, name, COALESCE(note, '') FROM locations ORDER BY name")
+	rows, err := a.st.ListLocations(r.Context())
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: "db_error"})
 		return
 	}
-	defer rows.Close()
 
-	items := make([]locationListItem, 0)
-	for rows.Next() {
-		var it locationListItem
-		if err := rows.Scan(&it.Id, &it.Name, &it.Note); err != nil {
-			writeJSON(w, http.StatusInternalServerError, apiError{Error: "db_error"})
-			return
-		}
-		items = append(items, it)
-	}
-	if rows.Err() != nil {
-		writeJSON(w, http.StatusInternalServerError, apiError{Error: "db_error"})
-		return
+	items := make([]locationListItem, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, locationListItem{Id: row.ID, Name: row.Name, Note: row.Note})
 	}
 
 	writeJSON(w, http.StatusOK, items)

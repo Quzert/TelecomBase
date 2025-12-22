@@ -1,6 +1,7 @@
 #include "authDialog.h"
 
 #include "apiClient.h"
+#include "messageBoxUtils.h"
 
 #include <QFormLayout>
 #include <QHBoxLayout>
@@ -52,6 +53,8 @@ AuthDialog::AuthDialog(ApiClient* apiClient, QWidget* parent)
     buttons->addWidget(cancelButton_);
 
     QVBoxLayout* root = new QVBoxLayout(this);
+    root->setContentsMargins(16, 16, 16, 16);
+    root->setSpacing(12);
     root->addWidget(tabWidget_);
     root->addLayout(buttons);
 
@@ -77,7 +80,7 @@ AuthDialog::AuthDialog(ApiClient* apiClient, QWidget* parent)
     connect(tabWidget_, &QTabWidget::currentChanged, this, [updateButtonsForTab](int) { updateButtonsForTab(); });
     updateButtonsForTab();
 
-    setFixedWidth(420);
+    setFixedWidth(460);
 }
 
 QString AuthDialog::token() const {
@@ -101,7 +104,7 @@ void AuthDialog::setBusy(bool busy) {
 
 void AuthDialog::onLoginClicked() {
     if (!apiClient_) {
-        QMessageBox::critical(this, "Ошибка", "API клиент не инициализирован");
+        UiUtils::critical(this, "Ошибка", "API клиент не инициализирован");
         return;
     }
 
@@ -114,7 +117,7 @@ void AuthDialog::onLoginClicked() {
         if (msg == "account_pending_approval") {
             msg = "Аккаунт ожидает подтверждения администратором";
         }
-        QMessageBox::warning(this, "Не удалось войти", msg.isEmpty() ? "Ошибка" : msg);
+        UiUtils::warning(this, "Не удалось войти", msg.isEmpty() ? "Ошибка" : msg);
         return;
     }
 
@@ -126,14 +129,14 @@ void AuthDialog::onLoginClicked() {
 
 void AuthDialog::onRegisterClicked() {
     if (!apiClient_) {
-        QMessageBox::critical(this, "Ошибка", "API клиент не инициализирован");
+        UiUtils::critical(this, "Ошибка", "API клиент не инициализирован");
         return;
     }
 
     const QString p1 = regPassword_->text();
     const QString p2 = regPassword2_->text();
     if (p1 != p2) {
-        QMessageBox::warning(this, "Ошибка", "Пароли не совпадают");
+        UiUtils::warning(this, "Ошибка", "Пароли не совпадают");
         return;
     }
 
@@ -146,7 +149,7 @@ void AuthDialog::onRegisterClicked() {
         if (msg == "account_pending_approval") {
             msg = "Аккаунт создан, но ожидает подтверждения администратором";
         }
-        QMessageBox::warning(this, "Не удалось зарегистрироваться", msg.isEmpty() ? "Ошибка" : msg);
+        UiUtils::warning(this, "Не удалось зарегистрироваться", msg.isEmpty() ? "Ошибка" : msg);
         return;
     }
 

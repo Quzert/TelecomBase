@@ -17,6 +17,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
+
+	"telecombase/server/internal/store"
 )
 
 type appConfig struct {
@@ -28,6 +30,7 @@ type appConfig struct {
 type app struct {
 	cfg appConfig
 	db  *pgxpool.Pool
+	st  *store.Queries
 }
 
 type healthResponse struct {
@@ -158,7 +161,7 @@ func main() {
 	}
 	defer db.Close()
 
-	application := &app{cfg: cfg, db: db}
+	application := &app{cfg: cfg, db: db, st: store.New(db)}
 	if v := strings.ToLower(strings.TrimSpace(getEnv("SEED_DEMO", ""))); v == "1" || v == "true" || v == "yes" {
 		application.seedIfEmpty(ctx)
 	}
@@ -251,12 +254,7 @@ func (a *app) handleAuthRegister(w http.ResponseWriter, r *http.Request) {
 
 	var role string
 	var approved bool
-	err = a.db.QueryRow(
-		r.Context(),
-		"INSERT INTO users(username, password_hash, role, approved) VALUES($1, $2, CASE WHEN (SELECT COUNT(*) FROM users WHERE role = 'admin') = 0 THEN 'admin' ELSE 'user' END, CASE WHEN (SELECT COUNT(*) FROM users WHERE role = 'admin') = 0 THEN TRUE ELSE FALSE END) RETURNING role, approved",
-		username,
-		string(passwordHash),
-	).Scan(&role, &approved)
+	created, err := a.st.CreateUserAutoAdmin(r.Context(), username, string(passwordHash))
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
@@ -268,6 +266,8 @@ func (a *app) handleAuthRegister(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: "db_error"})
 		return
 	}
+	role = created.Role
+	approved = created.Approved
 
 	if !approved && role != "admin" {
 		writeJSON(w, http.StatusForbidden, apiError{Error: "account_pending_approval"})
@@ -300,11 +300,7 @@ func (a *app) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	var passwordHash string
 	var role string
 	var approved bool
-	err := a.db.QueryRow(
-		r.Context(),
-		"SELECT password_hash, role, approved FROM users WHERE username = $1",
-		username,
-	).Scan(&passwordHash, &role, &approved)
+	got, err := a.st.GetUserAuthByUsername(r.Context(), username)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			writeJSON(w, http.StatusUnauthorized, apiError{Error: "invalid_credentials"})
@@ -313,6 +309,9 @@ func (a *app) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: "db_error"})
 		return
 	}
+	passwordHash = got.PasswordHash
+	role = got.Role
+	approved = got.Approved
 
 	if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(password)); err != nil {
 		writeJSON(w, http.StatusUnauthorized, apiError{Error: "invalid_credentials"})
@@ -339,27 +338,20 @@ func (a *app) handleUsersPendingList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := a.db.Query(r.Context(), "SELECT id, username, role, created_at FROM users WHERE approved = FALSE ORDER BY created_at")
+	rows, err := a.st.ListPendingUsers(r.Context())
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: "db_error"})
 		return
 	}
-	defer rows.Close()
 
-	items := make([]pendingUserListItem, 0)
-	for rows.Next() {
-		var it pendingUserListItem
-		var createdAt time.Time
-		if err := rows.Scan(&it.Id, &it.Username, &it.Role, &createdAt); err != nil {
-			writeJSON(w, http.StatusInternalServerError, apiError{Error: "db_error"})
-			return
-		}
-		it.CreatedAt = createdAt.Format(time.RFC3339)
-		items = append(items, it)
-	}
-	if rows.Err() != nil {
-		writeJSON(w, http.StatusInternalServerError, apiError{Error: "db_error"})
-		return
+	items := make([]pendingUserListItem, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, pendingUserListItem{
+			Id:        row.ID,
+			Username:  row.Username,
+			Role:      row.Role,
+			CreatedAt: row.CreatedAt.Format(time.RFC3339),
+		})
 	}
 
 	writeJSON(w, http.StatusOK, items)
@@ -378,12 +370,12 @@ func (a *app) handleUsersApprove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cmd, err := a.db.Exec(r.Context(), "UPDATE users SET approved = TRUE WHERE id = $1", id)
+	affected, err := a.st.ApproveUserByID(r.Context(), id)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: "db_error"})
 		return
 	}
-	if cmd.RowsAffected() == 0 {
+	if affected == 0 {
 		writeJSON(w, http.StatusNotFound, apiError{Error: "not_found"})
 		return
 	}
@@ -397,27 +389,21 @@ func (a *app) handleUsersList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := a.db.Query(r.Context(), "SELECT id, username, role, approved, created_at FROM users ORDER BY created_at")
+	rows, err := a.st.ListUsers(r.Context())
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: "db_error"})
 		return
 	}
-	defer rows.Close()
 
-	items := make([]userListItem, 0)
-	for rows.Next() {
-		var it userListItem
-		var createdAt time.Time
-		if err := rows.Scan(&it.Id, &it.Username, &it.Role, &it.Approved, &createdAt); err != nil {
-			writeJSON(w, http.StatusInternalServerError, apiError{Error: "db_error"})
-			return
-		}
-		it.CreatedAt = createdAt.Format(time.RFC3339)
-		items = append(items, it)
-	}
-	if rows.Err() != nil {
-		writeJSON(w, http.StatusInternalServerError, apiError{Error: "db_error"})
-		return
+	items := make([]userListItem, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, userListItem{
+			Id:        row.ID,
+			Username:  row.Username,
+			Role:      row.Role,
+			Approved:  row.Approved,
+			CreatedAt: row.CreatedAt.Format(time.RFC3339),
+		})
 	}
 
 	writeJSON(w, http.StatusOK, items)
@@ -444,7 +430,7 @@ func (a *app) handleUsersSetApproval(w http.ResponseWriter, r *http.Request) {
 
 	// Safety: don't disable admin accounts.
 	var targetRole string
-	err = a.db.QueryRow(r.Context(), "SELECT role FROM users WHERE id = $1", id).Scan(&targetRole)
+	targetRole, err = a.st.GetUserRoleByID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			writeJSON(w, http.StatusNotFound, apiError{Error: "not_found"})
@@ -458,12 +444,12 @@ func (a *app) handleUsersSetApproval(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cmd, err := a.db.Exec(r.Context(), "UPDATE users SET approved = $2 WHERE id = $1", id, req.Approved)
+	affected, err := a.st.SetUserApprovedByID(r.Context(), id, req.Approved)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: "db_error"})
 		return
 	}
-	if cmd.RowsAffected() == 0 {
+	if affected == 0 {
 		writeJSON(w, http.StatusNotFound, apiError{Error: "not_found"})
 		return
 	}
@@ -486,7 +472,7 @@ func (a *app) handleUsersDelete(w http.ResponseWriter, r *http.Request) {
 
 	var targetUsername string
 	var targetRole string
-	err = a.db.QueryRow(r.Context(), "SELECT username, role FROM users WHERE id = $1", id).Scan(&targetUsername, &targetRole)
+	target, err := a.st.GetUserUsernameRoleByID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			writeJSON(w, http.StatusNotFound, apiError{Error: "not_found"})
@@ -495,6 +481,9 @@ func (a *app) handleUsersDelete(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: "db_error"})
 		return
 	}
+
+	targetUsername = target.Username
+	targetRole = target.Role
 
 	if targetUsername == authUsername(r.Context()) {
 		writeJSON(w, http.StatusBadRequest, apiError{Error: "cannot_delete_self"})
@@ -505,12 +494,12 @@ func (a *app) handleUsersDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cmd, err := a.db.Exec(r.Context(), "DELETE FROM users WHERE id = $1", id)
+	affected, err := a.st.DeleteUserByID(r.Context(), id)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: "db_error"})
 		return
 	}
-	if cmd.RowsAffected() == 0 {
+	if affected == 0 {
 		writeJSON(w, http.StatusNotFound, apiError{Error: "not_found"})
 		return
 	}
@@ -548,25 +537,15 @@ func validateUsernamePassword(username, password string) error {
 }
 
 func (a *app) handleVendorsList(w http.ResponseWriter, r *http.Request) {
-	rows, err := a.db.Query(r.Context(), "SELECT id, name, COALESCE(country, '') FROM vendors ORDER BY name")
+	rows, err := a.st.ListVendors(r.Context())
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: "db_error"})
 		return
 	}
-	defer rows.Close()
 
-	items := make([]vendorListItem, 0)
-	for rows.Next() {
-		var it vendorListItem
-		if err := rows.Scan(&it.Id, &it.Name, &it.Country); err != nil {
-			writeJSON(w, http.StatusInternalServerError, apiError{Error: "db_error"})
-			return
-		}
-		items = append(items, it)
-	}
-	if rows.Err() != nil {
-		writeJSON(w, http.StatusInternalServerError, apiError{Error: "db_error"})
-		return
+	items := make([]vendorListItem, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, vendorListItem{Id: row.ID, Name: row.Name, Country: row.Country})
 	}
 
 	writeJSON(w, http.StatusOK, items)
@@ -591,12 +570,7 @@ func (a *app) handleVendorsCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var id int64
-	err := a.db.QueryRow(
-		r.Context(),
-		"INSERT INTO vendors(name, country) VALUES($1, $2) RETURNING id",
-		name,
-		nullIfEmpty(req.Country),
-	).Scan(&id)
+	id, err := a.st.CreateVendor(r.Context(), name, nullIfEmpty(req.Country))
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: "db_error"})
 		return
@@ -628,12 +602,12 @@ func (a *app) handleVendorsUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cmd, err := a.db.Exec(r.Context(), "UPDATE vendors SET name=$1, country=$2 WHERE id=$3", name, nullIfEmpty(req.Country), id)
+	affected, err := a.st.UpdateVendor(r.Context(), id, name, nullIfEmpty(req.Country))
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: "db_error"})
 		return
 	}
-	if cmd.RowsAffected() == 0 {
+	if affected == 0 {
 		writeJSON(w, http.StatusNotFound, apiError{Error: "not_found"})
 		return
 	}
@@ -653,7 +627,7 @@ func (a *app) handleVendorsDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cmd, err := a.db.Exec(r.Context(), "DELETE FROM vendors WHERE id=$1", id)
+	affected, err := a.st.DeleteVendor(r.Context(), id)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
@@ -665,7 +639,7 @@ func (a *app) handleVendorsDelete(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: "db_error"})
 		return
 	}
-	if cmd.RowsAffected() == 0 {
+	if affected == 0 {
 		writeJSON(w, http.StatusNotFound, apiError{Error: "not_found"})
 		return
 	}
@@ -695,13 +669,7 @@ func (a *app) handleModelsCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var id int64
-	err := a.db.QueryRow(
-		r.Context(),
-		"INSERT INTO models(vendor_id, name, device_type) VALUES($1, $2, $3) RETURNING id",
-		req.VendorId,
-		name,
-		nullIfEmpty(req.DeviceType),
-	).Scan(&id)
+	id, err := a.st.CreateModel(r.Context(), req.VendorId, name, nullIfEmpty(req.DeviceType))
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
@@ -744,14 +712,7 @@ func (a *app) handleModelsUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cmd, err := a.db.Exec(
-		r.Context(),
-		"UPDATE models SET vendor_id=$1, name=$2, device_type=$3 WHERE id=$4",
-		req.VendorId,
-		name,
-		nullIfEmpty(req.DeviceType),
-		id,
-	)
+	affected, err := a.st.UpdateModel(r.Context(), id, req.VendorId, name, nullIfEmpty(req.DeviceType))
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
@@ -763,7 +724,7 @@ func (a *app) handleModelsUpdate(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: "db_error"})
 		return
 	}
-	if cmd.RowsAffected() == 0 {
+	if affected == 0 {
 		writeJSON(w, http.StatusNotFound, apiError{Error: "not_found"})
 		return
 	}
@@ -783,7 +744,7 @@ func (a *app) handleModelsDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cmd, err := a.db.Exec(r.Context(), "DELETE FROM models WHERE id=$1", id)
+	affected, err := a.st.DeleteModel(r.Context(), id)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
@@ -795,7 +756,7 @@ func (a *app) handleModelsDelete(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: "db_error"})
 		return
 	}
-	if cmd.RowsAffected() == 0 {
+	if affected == 0 {
 		writeJSON(w, http.StatusNotFound, apiError{Error: "not_found"})
 		return
 	}
@@ -821,7 +782,7 @@ func (a *app) handleLocationsCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var id int64
-	err := a.db.QueryRow(r.Context(), "INSERT INTO locations(name, note) VALUES($1, $2) RETURNING id", name, nullIfEmpty(req.Note)).Scan(&id)
+	id, err := a.st.CreateLocation(r.Context(), name, nullIfEmpty(req.Note))
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: "db_error"})
 		return
@@ -853,12 +814,12 @@ func (a *app) handleLocationsUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cmd, err := a.db.Exec(r.Context(), "UPDATE locations SET name=$1, note=$2 WHERE id=$3", name, nullIfEmpty(req.Note), id)
+	affected, err := a.st.UpdateLocation(r.Context(), id, name, nullIfEmpty(req.Note))
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: "db_error"})
 		return
 	}
-	if cmd.RowsAffected() == 0 {
+	if affected == 0 {
 		writeJSON(w, http.StatusNotFound, apiError{Error: "not_found"})
 		return
 	}
@@ -878,7 +839,7 @@ func (a *app) handleLocationsDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cmd, err := a.db.Exec(r.Context(), "DELETE FROM locations WHERE id=$1", id)
+	affected, err := a.st.DeleteLocation(r.Context(), id)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
@@ -890,7 +851,7 @@ func (a *app) handleLocationsDelete(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: "db_error"})
 		return
 	}
-	if cmd.RowsAffected() == 0 {
+	if affected == 0 {
 		writeJSON(w, http.StatusNotFound, apiError{Error: "not_found"})
 		return
 	}
@@ -900,39 +861,24 @@ func (a *app) handleLocationsDelete(w http.ResponseWriter, r *http.Request) {
 
 func (a *app) handleDevicesList(w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
-
-	query := "SELECT d.id, v.name, m.name, COALESCE(l.name, ''), COALESCE(d.serial_number, ''), COALESCE(d.inventory_number, ''), d.status, COALESCE(to_char(d.installed_at, 'YYYY-MM-DD'), '') " +
-		"FROM devices d " +
-		"JOIN models m ON m.id = d.model_id " +
-		"JOIN vendors v ON v.id = m.vendor_id " +
-		"LEFT JOIN locations l ON l.id = d.location_id "
-
-	args := []any{}
-	if q != "" {
-		query += "WHERE (d.serial_number ILIKE '%' || $1 || '%' OR d.inventory_number ILIKE '%' || $1 || '%' OR m.name ILIKE '%' || $1 || '%' OR v.name ILIKE '%' || $1 || '%' OR d.status ILIKE '%' || $1 || '%') "
-		args = append(args, q)
-	}
-	query += "ORDER BY d.id DESC"
-
-	rows, err := a.db.Query(r.Context(), query, args...)
+	rows, err := a.st.ListDevices(r.Context(), q)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: "db_error"})
 		return
 	}
-	defer rows.Close()
 
-	items := make([]deviceListItem, 0)
-	for rows.Next() {
-		var it deviceListItem
-		if err := rows.Scan(&it.Id, &it.VendorName, &it.ModelName, &it.LocationName, &it.SerialNumber, &it.InventoryNumber, &it.Status, &it.InstalledAt); err != nil {
-			writeJSON(w, http.StatusInternalServerError, apiError{Error: "db_error"})
-			return
-		}
-		items = append(items, it)
-	}
-	if rows.Err() != nil {
-		writeJSON(w, http.StatusInternalServerError, apiError{Error: "db_error"})
-		return
+	items := make([]deviceListItem, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, deviceListItem{
+			Id:              row.ID,
+			VendorName:      row.VendorName,
+			ModelName:       row.ModelName,
+			LocationName:    row.LocationName,
+			SerialNumber:    row.SerialNumber,
+			InventoryNumber: row.InventoryNumber,
+			Status:          row.Status,
+			InstalledAt:     row.InstalledAt,
+		})
 	}
 
 	writeJSON(w, http.StatusOK, items)
@@ -961,9 +907,8 @@ func (a *app) handleDevicesCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var id int64
-	err = a.db.QueryRow(
+	id, err = a.st.CreateDevice(
 		r.Context(),
-		"INSERT INTO devices(model_id, location_id, serial_number, inventory_number, status, installed_at, description) VALUES($1, $2, $3, $4, $5, $6, $7) RETURNING id",
 		req.ModelId,
 		req.LocationId,
 		nullIfEmpty(req.SerialNumber),
@@ -971,7 +916,7 @@ func (a *app) handleDevicesCreate(w http.ResponseWriter, r *http.Request) {
 		status,
 		installedAt,
 		nullIfEmpty(req.Description),
-	).Scan(&id)
+	)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: "db_error"})
 		return
@@ -987,12 +932,7 @@ func (a *app) handleDevicesGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var resp deviceDetailsResponse
-	err = a.db.QueryRow(
-		r.Context(),
-		"SELECT id, model_id, location_id, COALESCE(serial_number, ''), COALESCE(inventory_number, ''), status, COALESCE(to_char(installed_at, 'YYYY-MM-DD'), ''), COALESCE(description, '') FROM devices WHERE id=$1",
-		id,
-	).Scan(&resp.Id, &resp.ModelId, &resp.LocationId, &resp.SerialNumber, &resp.InventoryNumber, &resp.Status, &resp.InstalledAt, &resp.Description)
+	row, err := a.st.GetDeviceByID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			writeJSON(w, http.StatusNotFound, apiError{Error: "not_found"})
@@ -1000,6 +940,17 @@ func (a *app) handleDevicesGet(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: "db_error"})
 		return
+	}
+
+	resp := deviceDetailsResponse{
+		Id:              row.ID,
+		ModelId:         row.ModelID,
+		LocationId:      row.LocationID,
+		SerialNumber:    row.SerialNumber,
+		InventoryNumber: row.InventoryNumber,
+		Status:          row.Status,
+		InstalledAt:     row.InstalledAt,
+		Description:     row.Description,
 	}
 
 	writeJSON(w, http.StatusOK, resp)
@@ -1033,9 +984,9 @@ func (a *app) handleDevicesUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cmd, err := a.db.Exec(
+	affected, err := a.st.UpdateDevice(
 		r.Context(),
-		"UPDATE devices SET model_id=$1, location_id=$2, serial_number=$3, inventory_number=$4, status=$5, installed_at=$6, description=$7 WHERE id=$8",
+		id,
 		req.ModelId,
 		req.LocationId,
 		nullIfEmpty(req.SerialNumber),
@@ -1043,13 +994,12 @@ func (a *app) handleDevicesUpdate(w http.ResponseWriter, r *http.Request) {
 		status,
 		installedAt,
 		nullIfEmpty(req.Description),
-		id,
 	)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: "db_error"})
 		return
 	}
-	if cmd.RowsAffected() == 0 {
+	if affected == 0 {
 		writeJSON(w, http.StatusNotFound, apiError{Error: "not_found"})
 		return
 	}
@@ -1070,12 +1020,12 @@ func (a *app) handleDevicesDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cmd, err := a.db.Exec(r.Context(), "DELETE FROM devices WHERE id=$1", id)
+	affected, err := a.st.DeleteDevice(r.Context(), id)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: "db_error"})
 		return
 	}
-	if cmd.RowsAffected() == 0 {
+	if affected == 0 {
 		writeJSON(w, http.StatusNotFound, apiError{Error: "not_found"})
 		return
 	}

@@ -12,6 +12,7 @@ FROM gcr.io/distroless/static-debian12
 
 WORKDIR /app
 COPY --from=build /out/telecombase-api /app/telecombase-api
+COPY --from=build /app/db/queries /app/db/queries
 
 ENV API_PORT=8080
 EXPOSE 8080

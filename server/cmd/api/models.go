@@ -13,28 +13,21 @@ type modelListItem struct {
 }
 
 func (a *app) handleModelsList(w http.ResponseWriter, r *http.Request) {
-	rows, err := a.db.Query(
-		r.Context(),
-		"SELECT m.id, m.vendor_id, v.name, m.name, COALESCE(m.device_type, '') FROM models m JOIN vendors v ON v.id = m.vendor_id ORDER BY v.name, m.name",
-	)
+	rows, err := a.st.ListModels(r.Context())
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: "db_error"})
 		return
 	}
-	defer rows.Close()
 
-	items := make([]modelListItem, 0)
-	for rows.Next() {
-		var it modelListItem
-		if err := rows.Scan(&it.Id, &it.VendorId, &it.VendorName, &it.Name, &it.DeviceType); err != nil {
-			writeJSON(w, http.StatusInternalServerError, apiError{Error: "db_error"})
-			return
-		}
-		items = append(items, it)
-	}
-	if rows.Err() != nil {
-		writeJSON(w, http.StatusInternalServerError, apiError{Error: "db_error"})
-		return
+	items := make([]modelListItem, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, modelListItem{
+			Id:         row.ID,
+			VendorId:   row.VendorID,
+			VendorName: row.VendorName,
+			Name:       row.Name,
+			DeviceType: row.DeviceType,
+		})
 	}
 
 	writeJSON(w, http.StatusOK, items)

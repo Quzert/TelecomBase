@@ -8,9 +8,15 @@
 #include <QFormLayout>
 #include <QLineEdit>
 #include <QMessageBox>
+#include <QPushButton>
 #include <QTableWidget>
 #include <QToolBar>
 #include <QVBoxLayout>
+#include <QHeaderView>
+
+#include "messageBoxUtils.h"
+
+#include <QIcon>
 
 static bool editModelDialog(QWidget* parent, ApiClient* apiClient, const QString& title, qint64& ioVendorId, QString& ioName, QString& ioDeviceType) {
     if (!apiClient) {
@@ -20,7 +26,7 @@ static bool editModelDialog(QWidget* parent, ApiClient* apiClient, const QString
     QList<VendorItem> vendors;
     QString err;
     if (!apiClient->listVendors(vendors, err)) {
-        QMessageBox::warning(parent, title, err.isEmpty() ? "Не удалось загрузить производителей" : err);
+        UiUtils::warning(parent, title, err.isEmpty() ? "Не удалось загрузить производителей" : err);
         return false;
     }
 
@@ -28,6 +34,8 @@ static bool editModelDialog(QWidget* parent, ApiClient* apiClient, const QString
     dlg.setWindowTitle(title);
 
     QVBoxLayout* root = new QVBoxLayout(&dlg);
+    root->setContentsMargins(16, 16, 16, 16);
+    root->setSpacing(12);
     QFormLayout* form = new QFormLayout();
 
     QComboBox* vendorCombo = new QComboBox(&dlg);
@@ -54,6 +62,13 @@ static bool editModelDialog(QWidget* parent, ApiClient* apiClient, const QString
     }
 
     QDialogButtonBox* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
+    // Принудительно убираем иконки (некоторые темы добавляют их автоматически)
+    if (auto* ok = buttons->button(QDialogButtonBox::Ok)) {
+        ok->setIcon(QIcon());
+    }
+    if (auto* cancel = buttons->button(QDialogButtonBox::Cancel)) {
+        cancel->setIcon(QIcon());
+    }
     root->addWidget(buttons);
     QObject::connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
     QObject::connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
@@ -67,11 +82,11 @@ static bool editModelDialog(QWidget* parent, ApiClient* apiClient, const QString
     ioDeviceType = typeEdit->text().trimmed();
 
     if (ioVendorId <= 0) {
-        QMessageBox::information(parent, title, "Производитель обязателен");
+        UiUtils::information(parent, title, "Производитель обязателен");
         return false;
     }
     if (ioName.isEmpty()) {
-        QMessageBox::information(parent, title, "Название модели обязательно");
+        UiUtils::information(parent, title, "Название модели обязательно");
         return false;
     }
 
@@ -94,8 +109,11 @@ ModelsDialog::ModelsDialog(ApiClient* apiClient, QWidget* parent)
 
 void ModelsDialog::buildUi() {
     QVBoxLayout* root = new QVBoxLayout(this);
+    root->setContentsMargins(16, 16, 16, 16);
+    root->setSpacing(12);
 
     QToolBar* toolbar = new QToolBar(this);
+    toolbar->setMovable(false);
     addAction_ = toolbar->addAction("Добавить");
     editAction_ = toolbar->addAction("Редактировать");
     deleteAction_ = toolbar->addAction("Удалить");
@@ -109,9 +127,18 @@ void ModelsDialog::buildUi() {
     table_->setSelectionMode(QAbstractItemView::SingleSelection);
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table_->setColumnHidden(0, true);
+    table_->setAlternatingRowColors(true);
+    table_->setShowGrid(false);
+    table_->verticalHeader()->setVisible(false);
+    table_->horizontalHeader()->setStretchLastSection(true);
+    // Больше места для колонки «Производитель»
+    table_->setColumnWidth(1, 240);
     root->addWidget(table_);
 
     QDialogButtonBox* closeBox = new QDialogButtonBox(QDialogButtonBox::Close, this);
+    if (auto* btn = closeBox->button(QDialogButtonBox::Close)) {
+        btn->setIcon(QIcon());
+    }
     connect(closeBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
     connect(closeBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
     root->addWidget(closeBox);
@@ -132,7 +159,7 @@ void ModelsDialog::reload() {
     QString err;
     QList<ModelItem> list;
     if (!apiClient_->listModels(list, err)) {
-        QMessageBox::warning(this, "Ошибка", err.isEmpty() ? "Не удалось загрузить модели" : err);
+        UiUtils::warning(this, "Ошибка", err.isEmpty() ? "Не удалось загрузить модели" : err);
         return;
     }
 
@@ -179,7 +206,7 @@ void ModelsDialog::addModel() {
 
     QString err;
     if (!apiClient_->createModel(vendorId, name, deviceType, err)) {
-        QMessageBox::warning(this, "Не удалось добавить", err.isEmpty() ? "Ошибка" : err);
+        UiUtils::warning(this, "Не удалось добавить", err.isEmpty() ? "Ошибка" : err);
         return;
     }
 
@@ -193,7 +220,7 @@ void ModelsDialog::editModel() {
 
     const qint64 id = selectedId();
     if (id <= 0) {
-        QMessageBox::information(this, "Редактирование", "Выберите запись");
+        UiUtils::information(this, "Редактирование", "Выберите запись");
         return;
     }
 
@@ -215,7 +242,7 @@ void ModelsDialog::editModel() {
 
     QString err;
     if (!apiClient_->updateModel(id, vendorId, name, deviceType, err)) {
-        QMessageBox::warning(this, "Не удалось сохранить", err.isEmpty() ? "Ошибка" : err);
+        UiUtils::warning(this, "Не удалось сохранить", err.isEmpty() ? "Ошибка" : err);
         return;
     }
 
@@ -229,18 +256,18 @@ void ModelsDialog::deleteModel() {
 
     const qint64 id = selectedId();
     if (id <= 0) {
-        QMessageBox::information(this, "Удаление", "Выберите запись");
+        UiUtils::information(this, "Удаление", "Выберите запись");
         return;
     }
 
-    const auto answer = QMessageBox::question(this, "Удаление", "Удалить выбранную модель?");
+    const auto answer = UiUtils::question(this, "Удаление", "Удалить выбранную модель?");
     if (answer != QMessageBox::Yes) {
         return;
     }
 
     QString err;
     if (!apiClient_->deleteModel(id, err)) {
-        QMessageBox::warning(this, "Не удалось удалить", err.isEmpty() ? "Ошибка" : err);
+        UiUtils::warning(this, "Не удалось удалить", err.isEmpty() ? "Ошибка" : err);
         return;
     }
 

@@ -1,0 +1,18 @@
+version: "2"
+
+sql:
+  - engine: "postgresql"
+    schema:
+      - "../db/init/*.sql"
+      - "../db/migrations/*.sql"
+    queries:
+      - "db/queries/*.sql"
+    gen:
+      go:
+        package: "store"
+        out: "internal/store"
+        sql_package: "pgx/v5"
+        emit_pointers_for_null_types: true
+        overrides:
+          - db_type: "date"
+            go_type: "time.Time"

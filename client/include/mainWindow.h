@@ -39,4 +39,5 @@ private:
     class QAction* refreshAction_;
     class QAction* deleteAction_;
     class QAction* logoutAction_;
+    class QAction* themeAction_;
 };

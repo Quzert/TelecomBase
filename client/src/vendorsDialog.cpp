@@ -7,9 +7,15 @@
 #include <QFormLayout>
 #include <QLineEdit>
 #include <QMessageBox>
+#include <QPushButton>
 #include <QTableWidget>
 #include <QToolBar>
 #include <QVBoxLayout>
+#include <QHeaderView>
+
+#include "messageBoxUtils.h"
+
+#include <QIcon>
 
 static bool editVendorDialog(QWidget* parent, const QString& title, QString& ioName, QString& ioCountry) {
     QDialog dlg(parent);
@@ -29,6 +35,13 @@ static bool editVendorDialog(QWidget* parent, const QString& title, QString& ioN
     root->addLayout(form);
 
     QDialogButtonBox* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
+    // Принудительно убираем иконки (некоторые темы добавляют их автоматически)
+    if (auto* ok = buttons->button(QDialogButtonBox::Ok)) {
+        ok->setIcon(QIcon());
+    }
+    if (auto* cancel = buttons->button(QDialogButtonBox::Cancel)) {
+        cancel->setIcon(QIcon());
+    }
     root->addWidget(buttons);
     QObject::connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
     QObject::connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
@@ -40,7 +53,7 @@ static bool editVendorDialog(QWidget* parent, const QString& title, QString& ioN
     ioName = nameEdit->text().trimmed();
     ioCountry = countryEdit->text().trimmed();
     if (ioName.isEmpty()) {
-        QMessageBox::information(parent, title, "Название обязательно");
+        UiUtils::information(parent, title, "Название обязательно");
         return false;
     }
 
@@ -63,8 +76,11 @@ VendorsDialog::VendorsDialog(ApiClient* apiClient, QWidget* parent)
 
 void VendorsDialog::buildUi() {
     QVBoxLayout* root = new QVBoxLayout(this);
+    root->setContentsMargins(16, 16, 16, 16);
+    root->setSpacing(12);
 
     QToolBar* toolbar = new QToolBar(this);
+    toolbar->setMovable(false);
     addAction_ = toolbar->addAction("Добавить");
     editAction_ = toolbar->addAction("Редактировать");
     deleteAction_ = toolbar->addAction("Удалить");
@@ -78,9 +94,16 @@ void VendorsDialog::buildUi() {
     table_->setSelectionMode(QAbstractItemView::SingleSelection);
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table_->setColumnHidden(0, true);
+    table_->setAlternatingRowColors(true);
+    table_->setShowGrid(false);
+    table_->verticalHeader()->setVisible(false);
+    table_->horizontalHeader()->setStretchLastSection(true);
     root->addWidget(table_);
 
     QDialogButtonBox* closeBox = new QDialogButtonBox(QDialogButtonBox::Close, this);
+    if (auto* btn = closeBox->button(QDialogButtonBox::Close)) {
+        btn->setIcon(QIcon());
+    }
     connect(closeBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
     connect(closeBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
     root->addWidget(closeBox);
@@ -101,7 +124,7 @@ void VendorsDialog::reload() {
     QString err;
     QList<VendorItem> list;
     if (!apiClient_->listVendors(list, err)) {
-        QMessageBox::warning(this, "Ошибка", err.isEmpty() ? "Не удалось загрузить производителей" : err);
+        UiUtils::warning(this, "Ошибка", err.isEmpty() ? "Не удалось загрузить производителей" : err);
         return;
     }
 
@@ -146,7 +169,7 @@ void VendorsDialog::addVendor() {
 
     QString err;
     if (!apiClient_->createVendor(name, country, err)) {
-        QMessageBox::warning(this, "Не удалось добавить", err.isEmpty() ? "Ошибка" : err);
+        UiUtils::warning(this, "Не удалось добавить", err.isEmpty() ? "Ошибка" : err);
         return;
     }
 
@@ -160,7 +183,7 @@ void VendorsDialog::editVendor() {
 
     const qint64 id = selectedId();
     if (id <= 0) {
-        QMessageBox::information(this, "Редактирование", "Выберите запись");
+        UiUtils::information(this, "Редактирование", "Выберите запись");
         return;
     }
 
@@ -180,7 +203,7 @@ void VendorsDialog::editVendor() {
 
     QString err;
     if (!apiClient_->updateVendor(id, name, country, err)) {
-        QMessageBox::warning(this, "Не удалось сохранить", err.isEmpty() ? "Ошибка" : err);
+        UiUtils::warning(this, "Не удалось сохранить", err.isEmpty() ? "Ошибка" : err);
         return;
     }
 
@@ -194,18 +217,18 @@ void VendorsDialog::deleteVendor() {
 
     const qint64 id = selectedId();
     if (id <= 0) {
-        QMessageBox::information(this, "Удаление", "Выберите запись");
+        UiUtils::information(this, "Удаление", "Выберите запись");
         return;
     }
 
-    const auto answer = QMessageBox::question(this, "Удаление", "Удалить выбранного производителя?");
+    const auto answer = UiUtils::question(this, "Удаление", "Удалить выбранного производителя?");
     if (answer != QMessageBox::Yes) {
         return;
     }
 
     QString err;
     if (!apiClient_->deleteVendor(id, err)) {
-        QMessageBox::warning(this, "Не удалось удалить", err.isEmpty() ? "Ошибка" : err);
+        UiUtils::warning(this, "Не удалось удалить", err.isEmpty() ? "Ошибка" : err);
         return;
     }
 

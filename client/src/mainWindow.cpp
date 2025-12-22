@@ -6,11 +6,14 @@
 #include "modelsDialog.h"
 #include "locationsDialog.h"
 #include "usersDialog.h"
+#include "themeManager.h"
+#include "messageBoxUtils.h"
 
 #include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QTableWidget>
+#include <QHeaderView>
 #include <QToolBar>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -61,6 +64,7 @@ void MainWindow::setSession(const QString& username, const QString& role) {
     refreshAction_ = nullptr;
     deleteAction_ = nullptr;
     logoutAction_ = nullptr;
+    themeAction_ = nullptr;
 
     buildUi(username, role);
     loadDevices();
@@ -68,6 +72,7 @@ void MainWindow::setSession(const QString& username, const QString& role) {
 
 void MainWindow::buildUi(const QString& username, const QString& role) {
     QToolBar* toolbar = addToolBar("Действия");
+    toolbar->setMovable(false);
     addAction_ = toolbar->addAction("Добавить");
     editAction_ = toolbar->addAction("Редактировать");
     deleteAction_ = toolbar->addAction("Удалить");
@@ -78,22 +83,28 @@ void MainWindow::buildUi(const QString& username, const QString& role) {
         }
     }
     toolbar->addSeparator();
-    if (role == "admin") {
-        toolbar->addSeparator();
-        vendorsAction_ = toolbar->addAction("Производители");
-        modelsAction_ = toolbar->addAction("Модели");
-        locationsAction_ = toolbar->addAction("Локации");
-        usersAction_ = toolbar->addAction("Пользователи");
-    }
-
-    toolbar->addSeparator();
     refreshAction_ = toolbar->addAction("Обновить");
 
     toolbar->addSeparator();
     logoutAction_ = toolbar->addAction("Выйти");
 
+    toolbar->addSeparator();
+    if (role == "admin") {
+        vendorsAction_ = toolbar->addAction("Производители");
+        modelsAction_ = toolbar->addAction("Модели");
+        locationsAction_ = toolbar->addAction("Локации");
+        usersAction_ = toolbar->addAction("Пользователи");
+        toolbar->addSeparator();
+    }
+
+    themeAction_ = toolbar->addAction("Тёмная тема");
+    themeAction_->setCheckable(true);
+    themeAction_->setChecked(ThemeManager::theme() == ThemeManager::Theme::Dark);
+
     QWidget* central = new QWidget(this);
     QVBoxLayout* layout = new QVBoxLayout(central);
+    layout->setContentsMargins(16, 16, 16, 16);
+    layout->setSpacing(12);
 
     QLabel* userInfo = new QLabel(QString("Пользователь: %1 (%2)").arg(username, role), central);
     layout->addWidget(userInfo);
@@ -109,6 +120,12 @@ void MainWindow::buildUi(const QString& username, const QString& role) {
     table_->setSelectionMode(QAbstractItemView::SingleSelection);
     table_->setSortingEnabled(true);
     table_->setColumnHidden(0, true);
+    table_->setAlternatingRowColors(true);
+    table_->setShowGrid(false);
+    table_->verticalHeader()->setVisible(false);
+    table_->horizontalHeader()->setStretchLastSection(true);
+    // Больше места для «Производитель», чтобы имена не обрезались.
+    table_->setColumnWidth(1, 240);
     layout->addWidget(table_);
 
     setCentralWidget(central);
@@ -117,6 +134,12 @@ void MainWindow::buildUi(const QString& username, const QString& role) {
     connect(refreshAction_, &QAction::triggered, this, &MainWindow::loadDevices);
     connect(searchEdit_, &QLineEdit::returnPressed, this, &MainWindow::loadDevices);
     connect(logoutAction_, &QAction::triggered, this, &MainWindow::logoutRequested);
+
+    if (themeAction_) {
+        connect(themeAction_, &QAction::toggled, this, [](bool enabled) {
+            ThemeManager::setTheme(enabled ? ThemeManager::Theme::Dark : ThemeManager::Theme::Light);
+        });
+    }
 
     if (vendorsAction_) {
         connect(vendorsAction_, &QAction::triggered, this, [this]() {
@@ -146,14 +169,14 @@ void MainWindow::buildUi(const QString& username, const QString& role) {
 
     connect(addAction_, &QAction::triggered, this, [this]() {
         if (!apiClient_) {
-            QMessageBox::critical(this, "Ошибка", "API клиент не инициализирован");
+            UiUtils::critical(this, "Ошибка", "API клиент не инициализирован");
             return;
         }
 
         DeviceDialog dlg(apiClient_, this);
         QString err;
         if (!dlg.loadReferenceData(err)) {
-            QMessageBox::warning(this, "Ошибка", err.isEmpty() ? "Не удалось загрузить справочники" : err);
+            UiUtils::warning(this, "Ошибка", err.isEmpty() ? "Не удалось загрузить справочники" : err);
             return;
         }
 
@@ -163,13 +186,13 @@ void MainWindow::buildUi(const QString& username, const QString& role) {
 
         const qint64 modelId = dlg.selectedModelId();
         if (modelId <= 0) {
-            QMessageBox::information(this, "Добавление", "Выберите модель");
+            UiUtils::information(this, "Добавление", "Выберите модель");
             return;
         }
 
         if (!apiClient_->createDevice(modelId, dlg.selectedLocationId(), dlg.serialNumber(), dlg.inventoryNumber(),
                                       dlg.status(), dlg.installedAt(), dlg.description(), err)) {
-            QMessageBox::warning(this, "Не удалось добавить", err.isEmpty() ? "Ошибка" : err);
+            UiUtils::warning(this, "Не удалось добавить", err.isEmpty() ? "Ошибка" : err);
             return;
         }
 
@@ -179,24 +202,24 @@ void MainWindow::buildUi(const QString& username, const QString& role) {
     connect(editAction_, &QAction::triggered, this, [this]() {
         const qint64 id = selectedDeviceId();
         if (id <= 0) {
-            QMessageBox::information(this, "Редактирование", "Выберите устройство в таблице");
+            UiUtils::information(this, "Редактирование", "Выберите устройство в таблице");
             return;
         }
         if (!apiClient_) {
-            QMessageBox::critical(this, "Ошибка", "API клиент не инициализирован");
+            UiUtils::critical(this, "Ошибка", "API клиент не инициализирован");
             return;
         }
 
         QString err;
         DeviceDetails details;
         if (!apiClient_->getDevice(id, details, err)) {
-            QMessageBox::warning(this, "Ошибка", err.isEmpty() ? "Не удалось загрузить устройство" : err);
+            UiUtils::warning(this, "Ошибка", err.isEmpty() ? "Не удалось загрузить устройство" : err);
             return;
         }
 
         DeviceDialog dlg(apiClient_, this);
         if (!dlg.loadReferenceData(err)) {
-            QMessageBox::warning(this, "Ошибка", err.isEmpty() ? "Не удалось загрузить справочники" : err);
+            UiUtils::warning(this, "Ошибка", err.isEmpty() ? "Не удалось загрузить справочники" : err);
             return;
         }
         dlg.setInitialDevice(details);
@@ -207,13 +230,13 @@ void MainWindow::buildUi(const QString& username, const QString& role) {
 
         const qint64 modelId = dlg.selectedModelId();
         if (modelId <= 0) {
-            QMessageBox::information(this, "Редактирование", "Выберите модель");
+            UiUtils::information(this, "Редактирование", "Выберите модель");
             return;
         }
 
         if (!apiClient_->updateDevice(id, modelId, dlg.selectedLocationId(), dlg.serialNumber(), dlg.inventoryNumber(),
                                       dlg.status(), dlg.installedAt(), dlg.description(), err)) {
-            QMessageBox::warning(this, "Не удалось сохранить", err.isEmpty() ? "Ошибка" : err);
+            UiUtils::warning(this, "Не удалось сохранить", err.isEmpty() ? "Ошибка" : err);
             return;
         }
 
@@ -223,23 +246,23 @@ void MainWindow::buildUi(const QString& username, const QString& role) {
     connect(deleteAction_, &QAction::triggered, this, [this]() {
         const qint64 id = selectedDeviceId();
         if (id <= 0) {
-            QMessageBox::information(this, "Удаление", "Выберите устройство в таблице");
+            UiUtils::information(this, "Удаление", "Выберите устройство в таблице");
             return;
         }
 
-        const auto answer = QMessageBox::question(this, "Удаление", "Удалить выбранное устройство?");
+        const auto answer = UiUtils::question(this, "Удаление", "Удалить выбранное устройство?");
         if (answer != QMessageBox::Yes) {
             return;
         }
 
         if (!apiClient_) {
-            QMessageBox::critical(this, "Ошибка", "API клиент не инициализирован");
+            UiUtils::critical(this, "Ошибка", "API клиент не инициализирован");
             return;
         }
 
         QString err;
         if (!apiClient_->deleteDevice(id, err)) {
-            QMessageBox::warning(this, "Не удалось удалить", err.isEmpty() ? "Ошибка" : err);
+            UiUtils::warning(this, "Не удалось удалить", err.isEmpty() ? "Ошибка" : err);
             return;
         }
         loadDevices();
@@ -254,7 +277,7 @@ void MainWindow::loadDevices() {
     QList<DeviceItem> devices;
     QString err;
     if (!apiClient_->listDevices(searchEdit_ ? searchEdit_->text().trimmed() : QString(), devices, err)) {
-        QMessageBox::warning(this, "Ошибка", err.isEmpty() ? "Не удалось загрузить устройства" : err);
+        UiUtils::warning(this, "Ошибка", err.isEmpty() ? "Не удалось загрузить устройства" : err);
         return;
     }
 

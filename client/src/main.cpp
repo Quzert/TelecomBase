@@ -1,12 +1,17 @@
 #include "apiClient.h"
 #include "authDialog.h"
 #include "mainWindow.h"
+#include "themeManager.h"
 
 #include <QApplication>
 
 int main(int argc, char* argv[]) {
     QApplication app(argc, argv);
     app.setQuitOnLastWindowClosed(false);
+
+    QCoreApplication::setOrganizationName("TelecomBase");
+    QCoreApplication::setApplicationName("TelecomBase");
+    ThemeManager::applyTo(app);
 
     ApiClient apiClient;
 

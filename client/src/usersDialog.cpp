@@ -5,9 +5,16 @@
 #include <QAction>
 #include <QDialogButtonBox>
 #include <QMessageBox>
+#include <QPushButton>
 #include <QTableWidget>
 #include <QToolBar>
 #include <QVBoxLayout>
+#include <QHeaderView>
+#include <QStyle>
+
+#include <QIcon>
+
+#include "messageBoxUtils.h"
 
 UsersDialog::UsersDialog(ApiClient* apiClient, QWidget* parent)
     : QDialog(parent)
@@ -25,8 +32,12 @@ UsersDialog::UsersDialog(ApiClient* apiClient, QWidget* parent)
 
 void UsersDialog::buildUi() {
     QVBoxLayout* root = new QVBoxLayout(this);
+    root->setContentsMargins(16, 16, 16, 16);
+    root->setSpacing(12);
 
     QToolBar* toolbar = new QToolBar(this);
+    toolbar->setMovable(false);
+    toolbar->setToolButtonStyle(Qt::ToolButtonIconOnly);
     approveAction_ = toolbar->addAction("Выдать доступ");
     disableAction_ = toolbar->addAction("Забрать доступ");
     deleteAction_ = toolbar->addAction("Удалить аккаунт");
@@ -34,15 +45,34 @@ void UsersDialog::buildUi() {
     refreshAction_ = toolbar->addAction("Обновить");
     root->addWidget(toolbar);
 
+    // Иконки: галочка/крестик (стандартные иконки Qt, без своих ресурсов)
+    if (approveAction_) {
+        approveAction_->setIcon(style()->standardIcon(QStyle::SP_DialogApplyButton));
+        approveAction_->setToolTip("Подтвердить пользователя");
+        approveAction_->setText(QString());
+    }
+    if (disableAction_) {
+        disableAction_->setIcon(style()->standardIcon(QStyle::SP_DialogCancelButton));
+        disableAction_->setToolTip("Отклонить/забрать доступ");
+        disableAction_->setText(QString());
+    }
+
     table_ = new QTableWidget(0, 5, this);
     table_->setHorizontalHeaderLabels({"ID", "Логин", "Роль", "Доступ", "Создан"});
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     table_->setSelectionMode(QAbstractItemView::SingleSelection);
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table_->setColumnHidden(0, true);
+    table_->setAlternatingRowColors(true);
+    table_->setShowGrid(false);
+    table_->verticalHeader()->setVisible(false);
+    table_->horizontalHeader()->setStretchLastSection(true);
     root->addWidget(table_);
 
     QDialogButtonBox* closeBox = new QDialogButtonBox(QDialogButtonBox::Close, this);
+    if (auto* btn = closeBox->button(QDialogButtonBox::Close)) {
+        btn->setIcon(QIcon());
+    }
     connect(closeBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
     connect(closeBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
     root->addWidget(closeBox);
@@ -63,7 +93,7 @@ void UsersDialog::reload() {
     QString err;
     QList<UserItem> list;
     if (!apiClient_->listUsers(list, err)) {
-        QMessageBox::warning(this, "Ошибка", err.isEmpty() ? "Не удалось загрузить пользователей" : err);
+        UiUtils::warning(this, "Ошибка", err.isEmpty() ? "Не удалось загрузить пользователей" : err);
         return;
     }
 
@@ -104,13 +134,13 @@ void UsersDialog::approveUser() {
 
     const qint64 id = selectedId();
     if (id <= 0) {
-        QMessageBox::information(this, "Доступ", "Выберите пользователя");
+        UiUtils::information(this, "Доступ", "Выберите пользователя");
         return;
     }
 
     QString err;
     if (!apiClient_->setUserApproved(id, true, err)) {
-        QMessageBox::warning(this, "Не удалось выдать доступ", err.isEmpty() ? "Ошибка" : err);
+        UiUtils::warning(this, "Не удалось выдать доступ", err.isEmpty() ? "Ошибка" : err);
         return;
     }
 
@@ -124,18 +154,18 @@ void UsersDialog::disableUser() {
 
     const qint64 id = selectedId();
     if (id <= 0) {
-        QMessageBox::information(this, "Доступ", "Выберите пользователя");
+        UiUtils::information(this, "Доступ", "Выберите пользователя");
         return;
     }
 
-    const auto answer = QMessageBox::question(this, "Доступ", "Забрать доступ у выбранного пользователя?");
+    const auto answer = UiUtils::question(this, "Доступ", "Забрать доступ у выбранного пользователя?");
     if (answer != QMessageBox::Yes) {
         return;
     }
 
     QString err;
     if (!apiClient_->setUserApproved(id, false, err)) {
-        QMessageBox::warning(this, "Не удалось забрать доступ", err.isEmpty() ? "Ошибка" : err);
+        UiUtils::warning(this, "Не удалось забрать доступ", err.isEmpty() ? "Ошибка" : err);
         return;
     }
 
@@ -149,18 +179,18 @@ void UsersDialog::deleteUser() {
 
     const qint64 id = selectedId();
     if (id <= 0) {
-        QMessageBox::information(this, "Удаление", "Выберите пользователя");
+        UiUtils::information(this, "Удаление", "Выберите пользователя");
         return;
     }
 
-    const auto answer = QMessageBox::question(this, "Удаление", "Удалить выбранный аккаунт?");
+    const auto answer = UiUtils::question(this, "Удаление", "Удалить выбранный аккаунт?");
     if (answer != QMessageBox::Yes) {
         return;
     }
 
     QString err;
     if (!apiClient_->deleteUser(id, err)) {
-        QMessageBox::warning(this, "Не удалось удалить", err.isEmpty() ? "Ошибка" : err);
+        UiUtils::warning(this, "Не удалось удалить", err.isEmpty() ? "Ошибка" : err);
         return;
     }
 

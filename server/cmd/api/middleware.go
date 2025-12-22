@@ -52,9 +52,7 @@ func (a *app) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		var role string
-		var approved bool
-		err = a.db.QueryRow(r.Context(), "SELECT role, approved FROM users WHERE username = $1", username).Scan(&role, &approved)
+		got, err := a.st.GetUserRoleApprovedByUsername(r.Context(), username)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				writeJSON(w, http.StatusUnauthorized, apiError{Error: "invalid_token"})
@@ -63,6 +61,8 @@ func (a *app) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 			writeJSON(w, http.StatusInternalServerError, apiError{Error: "db_error"})
 			return
 		}
+		role := got.Role
+		approved := got.Approved
 
 		if !approved && role != "admin" {
 			writeJSON(w, http.StatusForbidden, apiError{Error: "account_pending_approval"})

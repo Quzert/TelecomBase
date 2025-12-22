@@ -7,15 +7,23 @@
 #include <QFormLayout>
 #include <QLineEdit>
 #include <QMessageBox>
+#include <QPushButton>
 #include <QTableWidget>
 #include <QToolBar>
 #include <QVBoxLayout>
+#include <QHeaderView>
+
+#include "messageBoxUtils.h"
+
+#include <QIcon>
 
 static bool editLocationDialog(QWidget* parent, const QString& title, QString& ioName, QString& ioNote) {
     QDialog dlg(parent);
     dlg.setWindowTitle(title);
 
     QVBoxLayout* root = new QVBoxLayout(&dlg);
+    root->setContentsMargins(16, 16, 16, 16);
+    root->setSpacing(12);
     QFormLayout* form = new QFormLayout();
 
     QLineEdit* nameEdit = new QLineEdit(&dlg);
@@ -29,6 +37,13 @@ static bool editLocationDialog(QWidget* parent, const QString& title, QString& i
     root->addLayout(form);
 
     QDialogButtonBox* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
+    // Принудительно убираем иконки (некоторые темы добавляют их автоматически)
+    if (auto* ok = buttons->button(QDialogButtonBox::Ok)) {
+        ok->setIcon(QIcon());
+    }
+    if (auto* cancel = buttons->button(QDialogButtonBox::Cancel)) {
+        cancel->setIcon(QIcon());
+    }
     root->addWidget(buttons);
     QObject::connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
     QObject::connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
@@ -40,7 +55,7 @@ static bool editLocationDialog(QWidget* parent, const QString& title, QString& i
     ioName = nameEdit->text().trimmed();
     ioNote = noteEdit->text().trimmed();
     if (ioName.isEmpty()) {
-        QMessageBox::information(parent, title, "Название обязательно");
+        UiUtils::information(parent, title, "Название обязательно");
         return false;
     }
 
@@ -63,8 +78,11 @@ LocationsDialog::LocationsDialog(ApiClient* apiClient, QWidget* parent)
 
 void LocationsDialog::buildUi() {
     QVBoxLayout* root = new QVBoxLayout(this);
+    root->setContentsMargins(16, 16, 16, 16);
+    root->setSpacing(12);
 
     QToolBar* toolbar = new QToolBar(this);
+    toolbar->setMovable(false);
     addAction_ = toolbar->addAction("Добавить");
     editAction_ = toolbar->addAction("Редактировать");
     deleteAction_ = toolbar->addAction("Удалить");
@@ -78,9 +96,16 @@ void LocationsDialog::buildUi() {
     table_->setSelectionMode(QAbstractItemView::SingleSelection);
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table_->setColumnHidden(0, true);
+    table_->setAlternatingRowColors(true);
+    table_->setShowGrid(false);
+    table_->verticalHeader()->setVisible(false);
+    table_->horizontalHeader()->setStretchLastSection(true);
     root->addWidget(table_);
 
     QDialogButtonBox* closeBox = new QDialogButtonBox(QDialogButtonBox::Close, this);
+    if (auto* btn = closeBox->button(QDialogButtonBox::Close)) {
+        btn->setIcon(QIcon());
+    }
     connect(closeBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
     connect(closeBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
     root->addWidget(closeBox);
@@ -101,7 +126,7 @@ void LocationsDialog::reload() {
     QString err;
     QList<LocationItem> list;
     if (!apiClient_->listLocations(list, err)) {
-        QMessageBox::warning(this, "Ошибка", err.isEmpty() ? "Не удалось загрузить локации" : err);
+        UiUtils::warning(this, "Ошибка", err.isEmpty() ? "Не удалось загрузить локации" : err);
         return;
     }
 
@@ -146,7 +171,7 @@ void LocationsDialog::addLocation() {
 
     QString err;
     if (!apiClient_->createLocation(name, note, err)) {
-        QMessageBox::warning(this, "Не удалось добавить", err.isEmpty() ? "Ошибка" : err);
+        UiUtils::warning(this, "Не удалось добавить", err.isEmpty() ? "Ошибка" : err);
         return;
     }
 
@@ -160,7 +185,7 @@ void LocationsDialog::editLocation() {
 
     const qint64 id = selectedId();
     if (id <= 0) {
-        QMessageBox::information(this, "Редактирование", "Выберите запись");
+        UiUtils::information(this, "Редактирование", "Выберите запись");
         return;
     }
 
@@ -180,7 +205,7 @@ void LocationsDialog::editLocation() {
 
     QString err;
     if (!apiClient_->updateLocation(id, name, note, err)) {
-        QMessageBox::warning(this, "Не удалось сохранить", err.isEmpty() ? "Ошибка" : err);
+        UiUtils::warning(this, "Не удалось сохранить", err.isEmpty() ? "Ошибка" : err);
         return;
     }
 
@@ -194,18 +219,18 @@ void LocationsDialog::deleteLocation() {
 
     const qint64 id = selectedId();
     if (id <= 0) {
-        QMessageBox::information(this, "Удаление", "Выберите запись");
+        UiUtils::information(this, "Удаление", "Выберите запись");
         return;
     }
 
-    const auto answer = QMessageBox::question(this, "Удаление", "Удалить выбранную локацию?");
+    const auto answer = UiUtils::question(this, "Удаление", "Удалить выбранную локацию?");
     if (answer != QMessageBox::Yes) {
         return;
     }
 
     QString err;
     if (!apiClient_->deleteLocation(id, err)) {
-        QMessageBox::warning(this, "Не удалось удалить", err.isEmpty() ? "Ошибка" : err);
+        UiUtils::warning(this, "Не удалось удалить", err.isEmpty() ? "Ошибка" : err);
         return;
     }
 

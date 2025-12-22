@@ -1,0 +1,138 @@
+/* Minimal modern dark theme for Qt Widgets (Fusion).
+   Goal: readable dark UI with the same spacing/rounding.
+*/
+
+* {
+    font-size: 13px;
+}
+
+QWidget {
+    background: #0b1220;
+    color: #e5e7eb;
+}
+
+QDialog {
+    background: #0b1220;
+}
+
+QLabel {
+    background: transparent;
+}
+
+QToolBar {
+    background: #0f172a;
+    border: 1px solid #1f2937;
+    padding: 8px;
+    spacing: 8px;
+}
+
+QToolButton {
+    background: transparent;
+    border: 1px solid transparent;
+    padding: 6px 10px;
+    border-radius: 8px;
+    color: #e5e7eb;
+}
+
+QToolButton:hover {
+    background: #111827;
+    border-color: #1f2937;
+}
+
+QToolButton:pressed {
+    background: #1f2937;
+}
+
+QLineEdit,
+QTextEdit,
+QPlainTextEdit,
+QComboBox {
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    padding: 6px 10px;
+    color: #e5e7eb;
+    selection-background-color: #1d4ed8;
+}
+
+QLineEdit:focus,
+QTextEdit:focus,
+QPlainTextEdit:focus,
+QComboBox:focus {
+    border: 1px solid #60a5fa;
+}
+
+QComboBox::drop-down {
+    border: 0px;
+    width: 28px;
+}
+
+QPushButton {
+    background: #2563eb;
+    border: 1px solid #2563eb;
+    color: #ffffff;
+    padding: 7px 14px;
+    border-radius: 8px;
+}
+
+QPushButton:hover {
+    background: #1d4ed8;
+    border-color: #1d4ed8;
+}
+
+QPushButton:pressed {
+    background: #1e40af;
+    border-color: #1e40af;
+}
+
+QPushButton:disabled {
+    background: #475569;
+    border-color: #475569;
+}
+
+QDialogButtonBox QPushButton {
+    min-width: 110px;
+}
+
+QTabWidget::pane {
+    border: 1px solid #1f2937;
+    border-radius: 10px;
+    background: #0f172a;
+}
+
+QTabBar::tab {
+    background: #0b1220;
+    border: 1px solid #1f2937;
+    padding: 8px 12px;
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+    margin-right: 6px;
+    color: #e5e7eb;
+}
+
+QTabBar::tab:selected {
+    background: #0f172a;
+}
+
+QTableView {
+    background: #0f172a;
+    border: 1px solid #1f2937;
+    border-radius: 10px;
+    gridline-color: #111827;
+    selection-background-color: #1d4ed8;
+    selection-color: #ffffff;
+    alternate-background-color: #0b1220;
+}
+
+QHeaderView::section {
+    background: #111827;
+    border: none;
+    border-bottom: 1px solid #1f2937;
+    padding: 6px 8px;
+    font-weight: 600;
+    color: #e5e7eb;
+}
+
+QMessageBox {
+    background: #0b1220;
+}

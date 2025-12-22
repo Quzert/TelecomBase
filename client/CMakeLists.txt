@@ -21,6 +21,8 @@ add_executable(TelecomBaseClient
     src/locationsDialog.cpp
     src/usersDialog.cpp
     src/mainWindow.cpp
+    src/themeManager.cpp
+    resources/resources.qrc
     include/apiClient.h
     include/models.h
     include/authDialog.h
@@ -30,6 +32,7 @@ add_executable(TelecomBaseClient
     include/locationsDialog.h
     include/usersDialog.h
     include/mainWindow.h
+    include/themeManager.h
 )
 
 target_include_directories(TelecomBaseClient PRIVATE include)

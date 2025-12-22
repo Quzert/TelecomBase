@@ -9,6 +9,9 @@
 #include <QLineEdit>
 #include <QTextEdit>
 #include <QVBoxLayout>
+#include <QPushButton>
+
+#include <QIcon>
 
 DeviceDialog::DeviceDialog(ApiClient* apiClient, QWidget* parent)
     : QDialog(parent)
@@ -27,12 +30,16 @@ DeviceDialog::DeviceDialog(ApiClient* apiClient, QWidget* parent)
 
 void DeviceDialog::buildUi() {
     QVBoxLayout* root = new QVBoxLayout(this);
+    root->setContentsMargins(16, 16, 16, 16);
+    root->setSpacing(12);
 
     QLabel* hint = new QLabel("Заполните поля устройства. Дата: YYYY-MM-DD (можно пусто).", this);
     hint->setWordWrap(true);
     root->addWidget(hint);
 
     QFormLayout* form = new QFormLayout();
+    form->setVerticalSpacing(10);
+    form->setHorizontalSpacing(14);
 
     modelCombo_ = new QComboBox(this);
     form->addRow("Модель:", modelCombo_);
@@ -61,6 +68,13 @@ void DeviceDialog::buildUi() {
     root->addLayout(form);
 
     QDialogButtonBox* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
+    // Принудительно убираем иконки (некоторые темы добавляют их автоматически)
+    if (auto* ok = buttons->button(QDialogButtonBox::Ok)) {
+        ok->setIcon(QIcon());
+    }
+    if (auto* cancel = buttons->button(QDialogButtonBox::Cancel)) {
+        cancel->setIcon(QIcon());
+    }
     connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
     root->addWidget(buttons);
