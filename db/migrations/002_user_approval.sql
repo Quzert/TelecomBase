@@ -1,5 +1,5 @@
--- Add user approval gate.
--- New users are created as approved=false, and must be approved by admin.
+-- Добавление подтверждения пользователя.
+-- Новые пользователи создаются с approved=false и должны быть подтверждены администратором.
 
 BEGIN;
 

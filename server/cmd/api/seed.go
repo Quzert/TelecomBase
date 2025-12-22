@@ -6,8 +6,8 @@ import (
 )
 
 func (a *app) seedIfEmpty(ctx context.Context) {
-	// Seed minimal reference data so the demo works out-of-the-box.
-	// Safe to run multiple times: only seeds if tables are empty.
+	// Минимальные справочные данные, чтобы демо работало «из коробки».
+	// Идемпотентно: заполняет только если таблицы пустые.
 
 	vendorsCount, err := a.st.CountVendors(ctx)
 	if err != nil {

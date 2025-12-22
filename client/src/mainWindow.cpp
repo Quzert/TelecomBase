@@ -39,7 +39,6 @@ MainWindow::MainWindow(ApiClient* apiClient, const QString& username, const QStr
 }
 
 void MainWindow::setSession(const QString& username, const QString& role) {
-    // Clear existing UI
     const auto toolbars = findChildren<QToolBar*>();
     for (auto* tb : toolbars) {
         removeToolBar(tb);
@@ -51,7 +50,6 @@ void MainWindow::setSession(const QString& username, const QString& role) {
         delete cw;
     }
 
-    // Reset pointers
     devices_.clear();
     searchEdit_ = nullptr;
     table_ = nullptr;

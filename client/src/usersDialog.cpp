@@ -45,7 +45,7 @@ void UsersDialog::buildUi() {
     refreshAction_ = toolbar->addAction("Обновить");
     root->addWidget(toolbar);
 
-    // Иконки: галочка/крестик (стандартные иконки Qt, без своих ресурсов)
+    // Используем стандартные иконки Qt (без своих ресурсов).
     if (approveAction_) {
         approveAction_->setIcon(style()->standardIcon(QStyle::SP_DialogApplyButton));
         approveAction_->setToolTip("Подтвердить пользователя");

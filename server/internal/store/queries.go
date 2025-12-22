@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// Users
+// Пользователи
 
 type CreateUserAutoAdminRow struct {
 	Role     string
@@ -148,7 +148,7 @@ func (q *Queries) DeleteUserByID(ctx context.Context, id int64) (int64, error) {
 	return cmd.RowsAffected(), nil
 }
 
-// Vendors
+// Производители
 
 type ListVendorsRow struct {
 	ID      int64
@@ -214,7 +214,7 @@ func (q *Queries) GetFirstVendorID(ctx context.Context) (int64, error) {
 	return id, err
 }
 
-// Models
+// Модели
 
 type ListModelsRow struct {
 	ID         int64
@@ -275,7 +275,7 @@ func (q *Queries) CountModels(ctx context.Context) (int64, error) {
 	return cnt, err
 }
 
-// Locations
+// Локации
 
 type ListLocationsRow struct {
 	ID   int64
@@ -334,7 +334,7 @@ func (q *Queries) CountLocations(ctx context.Context) (int64, error) {
 	return cnt, err
 }
 
-// Devices
+// Устройства
 
 type ListDevicesRow struct {
 	ID              int64

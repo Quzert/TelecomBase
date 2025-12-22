@@ -56,12 +56,12 @@ func resolveQueriesDir() (string, error) {
 		return v, nil
 	}
 
-	// Common dev case: run from module root (server/).
+	// Частый dev-кейс: запуск из корня модуля (server/).
 	if dirExists("db/queries") {
 		return "db/queries", nil
 	}
 
-	// If someone runs from repo root.
+	// Запуск из корня репозитория.
 	if dirExists("server/db/queries") {
 		return "server/db/queries", nil
 	}
@@ -71,11 +71,11 @@ func resolveQueriesDir() (string, error) {
 		return "", fmt.Errorf("resolve executable path: %w", err)
 	}
 	exeDir := filepath.Dir(exe)
-	// Typical container layout: /app/telecombase-api + /app/db/queries
+	// Типичный layout в контейнере: /app/telecombase-api + /app/db/queries.
 	if dirExists(filepath.Join(exeDir, "db/queries")) {
 		return filepath.Join(exeDir, "db/queries"), nil
 	}
-	// If binary is in a subdir.
+	// Если бинарник лежит во вложенной директории.
 	if dirExists(filepath.Join(exeDir, "../db/queries")) {
 		return filepath.Clean(filepath.Join(exeDir, "../db/queries")), nil
 	}
@@ -155,7 +155,7 @@ func parseNamedQueriesFromDir(dir string) (map[string]string, error) {
 		flush()
 	}
 
-	// Fail fast if dir exists but no named queries were parsed.
+	// Падаем сразу, если директория есть, но именованные запросы не найдены.
 	if len(entries) > 0 && len(result) == 0 {
 		return nil, fmt.Errorf("no named queries found in %s (expected '-- name: <QueryName> :...')", dir)
 	}

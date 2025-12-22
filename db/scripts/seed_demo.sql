@@ -1,10 +1,9 @@
--- Demo seed data for TelecomBase (run manually).
--- Adds 3 vendors, 6 models, 3 locations.
--- Idempotent: uses WHERE NOT EXISTS checks.
+-- Демо-данные для TelecomBase (ручной запуск).
+-- Добавляет 3 производителя, 6 моделей, 3 локации.
+-- Идемпотентно: используется WHERE NOT EXISTS.
 
 BEGIN;
 
--- Vendors
 INSERT INTO vendors(name, country)
 SELECT 'Cisco', 'US'
 WHERE NOT EXISTS (SELECT 1 FROM vendors WHERE name = 'Cisco');
@@ -17,7 +16,6 @@ INSERT INTO vendors(name, country)
 SELECT 'Huawei', 'CN'
 WHERE NOT EXISTS (SELECT 1 FROM vendors WHERE name = 'Huawei');
 
--- Locations
 INSERT INTO locations(name, note)
 SELECT 'Main office', 'Default location'
 WHERE NOT EXISTS (SELECT 1 FROM locations WHERE name = 'Main office');
@@ -30,7 +28,6 @@ INSERT INTO locations(name, note)
 SELECT 'Data center', 'Rack area'
 WHERE NOT EXISTS (SELECT 1 FROM locations WHERE name = 'Data center');
 
--- Models
 WITH v AS (SELECT id FROM vendors WHERE name = 'Cisco' LIMIT 1)
 INSERT INTO models(vendor_id, name, device_type)
 SELECT v.id, 'ISR 4321', 'router'

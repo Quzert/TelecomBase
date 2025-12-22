@@ -19,7 +19,6 @@ AuthDialog::AuthDialog(ApiClient* apiClient, QWidget* parent)
 
     tabWidget_ = new QTabWidget(this);
 
-    // Login tab
     QWidget* loginTab = new QWidget(this);
     QFormLayout* loginForm = new QFormLayout(loginTab);
     loginUsername_ = new QLineEdit(loginTab);
@@ -29,7 +28,6 @@ AuthDialog::AuthDialog(ApiClient* apiClient, QWidget* parent)
     loginForm->addRow("Пароль", loginPassword_);
     tabWidget_->addTab(loginTab, "Вход");
 
-    // Register tab
     QWidget* registerTab = new QWidget(this);
     QFormLayout* regForm = new QFormLayout(registerTab);
     regUsername_ = new QLineEdit(registerTab);
@@ -64,7 +62,6 @@ AuthDialog::AuthDialog(ApiClient* apiClient, QWidget* parent)
 
     auto updateButtonsForTab = [this]() {
         const int idx = tabWidget_->currentIndex();
-        // 0 = login, 1 = register
         const bool isLogin = (idx == 0);
         loginButton_->setVisible(isLogin);
         registerButton_->setVisible(!isLogin);

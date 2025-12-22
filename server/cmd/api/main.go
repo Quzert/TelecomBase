@@ -171,7 +171,6 @@ func main() {
 	mux.HandleFunc("POST /auth/register", application.handleAuthRegister)
 	mux.HandleFunc("POST /auth/login", application.handleAuthLogin)
 
-	// Protected endpoints
 	mux.HandleFunc("GET /vendors", application.requireAuth(application.handleVendorsList))
 	mux.HandleFunc("POST /vendors", application.requireAuth(application.handleVendorsCreate))
 	mux.HandleFunc("PUT /vendors/{id}", application.requireAuth(application.handleVendorsUpdate))
@@ -193,10 +192,8 @@ func main() {
 	mux.HandleFunc("PUT /devices/{id}", application.requireAuth(application.handleDevicesUpdate))
 	mux.HandleFunc("DELETE /devices/{id}", application.requireAuth(application.handleDevicesDelete))
 
-	// Admin: approve users
 	mux.HandleFunc("GET /users/pending", application.requireAuth(application.handleUsersPendingList))
 	mux.HandleFunc("POST /users/{id}/approve", application.requireAuth(application.handleUsersApprove))
-	// Admin: manage users
 	mux.HandleFunc("GET /users", application.requireAuth(application.handleUsersList))
 	mux.HandleFunc("PUT /users/{id}/approval", application.requireAuth(application.handleUsersSetApproval))
 	mux.HandleFunc("DELETE /users/{id}", application.requireAuth(application.handleUsersDelete))
@@ -428,7 +425,7 @@ func (a *app) handleUsersSetApproval(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Safety: don't disable admin accounts.
+	// Безопасность: нельзя отключать админские аккаунты.
 	var targetRole string
 	targetRole, err = a.st.GetUserRoleByID(r.Context(), id)
 	if err != nil {

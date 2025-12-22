@@ -1,10 +1,9 @@
--- Demo devices seed data for TelecomBase (run manually).
--- Adds a few devices so the main table is not empty.
--- Idempotent: uses WHERE NOT EXISTS checks on serial_number.
+-- Демо-устройства для TelecomBase (ручной запуск).
+-- Добавляет несколько устройств, чтобы главная таблица не была пустой.
+-- Идемпотентно: используется WHERE NOT EXISTS по serial_number.
 
 BEGIN;
 
--- Device 1: Cisco ISR 4321 @ Main office
 WITH m AS (
     SELECT m.id AS model_id
     FROM models m
@@ -19,7 +18,6 @@ SELECT m.model_id, l.location_id, 'DEMO-SN-001', 'INV-001', 'active', CURRENT_DA
 FROM m, l
 WHERE NOT EXISTS (SELECT 1 FROM devices WHERE serial_number = 'DEMO-SN-001');
 
--- Device 2: Cisco Catalyst 2960 @ Data center
 WITH m AS (
     SELECT m.id AS model_id
     FROM models m
@@ -34,7 +32,6 @@ SELECT m.model_id, l.location_id, 'DEMO-SN-002', 'INV-002', 'active', CURRENT_DA
 FROM m, l
 WHERE NOT EXISTS (SELECT 1 FROM devices WHERE serial_number = 'DEMO-SN-002');
 
--- Device 3: Juniper MX480 @ Data center
 WITH m AS (
     SELECT m.id AS model_id
     FROM models m
@@ -49,7 +46,6 @@ SELECT m.model_id, l.location_id, 'DEMO-SN-003', 'INV-003', 'active', CURRENT_DA
 FROM m, l
 WHERE NOT EXISTS (SELECT 1 FROM devices WHERE serial_number = 'DEMO-SN-003');
 
--- Device 4: Juniper SRX300 @ Branch office
 WITH m AS (
     SELECT m.id AS model_id
     FROM models m
@@ -64,7 +60,6 @@ SELECT m.model_id, l.location_id, 'DEMO-SN-004', 'INV-004', 'active', CURRENT_DA
 FROM m, l
 WHERE NOT EXISTS (SELECT 1 FROM devices WHERE serial_number = 'DEMO-SN-004');
 
--- Device 5: Huawei S5720 @ Branch office
 WITH m AS (
     SELECT m.id AS model_id
     FROM models m
@@ -79,7 +74,6 @@ SELECT m.model_id, l.location_id, 'DEMO-SN-005', 'INV-005', 'active', CURRENT_DA
 FROM m, l
 WHERE NOT EXISTS (SELECT 1 FROM devices WHERE serial_number = 'DEMO-SN-005');
 
--- Device 6: Huawei AR169 @ Main office
 WITH m AS (
     SELECT m.id AS model_id
     FROM models m
