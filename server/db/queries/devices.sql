@@ -1,3 +1,4 @@
+-- name: ListDevices :many
 SELECT d.id,
        v.name AS vendor_name,
        m.name AS model_name,
@@ -20,10 +21,12 @@ WHERE (
 )
 ORDER BY d.id DESC;
 
+-- name: CreateDevice :one
 INSERT INTO devices(model_id, location_id, serial_number, inventory_number, status, installed_at, description)
 VALUES($1, $2, $3, $4, $5, $6, $7)
 RETURNING id;
 
+-- name: GetDeviceByID :one
 SELECT id,
        model_id,
        location_id,
@@ -35,6 +38,7 @@ SELECT id,
 FROM devices
 WHERE id = $1;
 
+-- name: UpdateDevice :exec
 UPDATE devices
 SET model_id = $1,
     location_id = $2,
@@ -45,5 +49,6 @@ SET model_id = $1,
     description = $7
 WHERE id = $8;
 
+  -- name: DeleteDevice :exec
 DELETE FROM devices
 WHERE id = $1;
